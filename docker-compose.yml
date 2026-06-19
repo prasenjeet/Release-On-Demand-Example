@@ -1,0 +1,32 @@
+name: release-on-demand
+
+services:
+
+  # ── flagd: OpenFeature flag evaluation daemon ─────────────────────────────
+  flagd:
+    image: ghcr.io/open-feature/flagd:latest
+    command: start --uri file:/etc/flagd/flags.json
+    volumes:
+      - ./flags:/etc/flagd        # flagd hot-reloads when flags.json changes
+    ports:
+      - "8013:8013"               # gRPC (used by the app SDK)
+      - "8016:8016"               # HTTP / REST evaluation API
+    restart: unless-stopped
+
+  # ── app: Acme Shop Node.js application ───────────────────────────────────
+  app:
+    build:
+      context: ./app
+      dockerfile: Dockerfile
+    ports:
+      - "3000:3000"
+    environment:
+      FLAGD_HOST: flagd
+      FLAGD_PORT: "8013"
+      PORT: "3000"
+      FLAGS_FILE: /flags/flags.json
+    volumes:
+      - ./flags:/flags            # admin UI writes flag changes here
+    depends_on:
+      - flagd
+    restart: unless-stopped

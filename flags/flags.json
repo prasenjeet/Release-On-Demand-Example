@@ -1,0 +1,79 @@
+{
+  "$schema": "https://flagd.dev/schema/v0/flags.json",
+  "flags": {
+    "new-product-layout": {
+      "state": "ENABLED",
+      "variants": {
+        "on": true,
+        "off": false
+      },
+      "defaultVariant": "off",
+      "metadata": {
+        "description": "Switches product listing from row view to card grid layout"
+      }
+    },
+    "express-checkout": {
+      "state": "ENABLED",
+      "variants": {
+        "on": true,
+        "off": false
+      },
+      "defaultVariant": "off",
+      "metadata": {
+        "description": "Enables the streamlined single-page checkout experience"
+      }
+    },
+    "holiday-promotion": {
+      "state": "ENABLED",
+      "variants": {
+        "on": true,
+        "off": false
+      },
+      "defaultVariant": "off",
+      "metadata": {
+        "description": "Shows holiday sale banner and applies 20% discount to all products"
+      }
+    },
+    "beta-search": {
+      "state": "ENABLED",
+      "variants": {
+        "on": true,
+        "off": false
+      },
+      "defaultVariant": "off",
+      "targeting": {
+        "if": [
+          {
+            "in": [
+              { "var": "email" },
+              ["beta@example.com", "tester@example.com", "qa@example.com"]
+            ]
+          },
+          "on",
+          "off"
+        ]
+      },
+      "metadata": {
+        "description": "New real-time search — targeted at beta users by email address"
+      }
+    },
+    "canary-recommendation-engine": {
+      "state": "ENABLED",
+      "variants": {
+        "on": true,
+        "off": false
+      },
+      "defaultVariant": "off",
+      "targeting": {
+        "fractional": [
+          { "var": "targetingKey" },
+          ["on", 20],
+          ["off", 80]
+        ]
+      },
+      "metadata": {
+        "description": "New AI recommendation engine rolled out to 20% of users (canary release)"
+      }
+    }
+  }
+}

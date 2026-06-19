@@ -1,0 +1,26 @@
+{
+  "name": "release-on-demand-demo",
+  "version": "1.0.0",
+  "description": "Demo app showing Release on Demand with OpenFeature + flagd",
+  "main": "src/index.js",
+  "scripts": {
+    "start": "node src/index.js",
+    "dev": "node --watch src/index.js",
+    "test": "jest --forceExit",
+    "lint": "eslint src/"
+  },
+  "dependencies": {
+    "@openfeature/flagd-provider": "^0.16.0",
+    "@openfeature/server-sdk": "^1.22.0",
+    "express": "^4.19.2"
+  },
+  "devDependencies": {
+    "eslint": "^8.57.0",
+    "jest": "^29.7.0",
+    "supertest": "^7.0.0"
+  },
+  "jest": {
+    "testEnvironment": "node",
+    "testMatch": ["**/test/**/*.test.js"]
+  }
+}

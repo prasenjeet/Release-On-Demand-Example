@@ -1,0 +1,88 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Acme Shop — Release on Demand Demo</title>
+  <link rel="stylesheet" href="/css/styles.css">
+</head>
+<body>
+
+  <!-- ── Header ────────────────────────────────────────────────────────── -->
+  <header class="header">
+    <div class="container">
+      <div class="header-inner">
+        <span class="logo">🛒 Acme Shop</span>
+        <nav>
+          <a href="/">Products</a>
+          <a href="/checkout">Checkout</a>
+          <a href="/admin" class="admin-link">⚙ Feature Flags</a>
+        </nav>
+      </div>
+    </div>
+  </header>
+
+  <!-- ── Live Feature Status Bar ───────────────────────────────────────── -->
+  <div class="feature-bar">
+    <div class="container">
+      <span class="feature-bar-label">Active Flags</span>
+      <div id="feature-badges" class="badges">
+        <span class="badge badge-off">loading…</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── Holiday Promotion Banner (flag: holiday-promotion) ────────────── -->
+  <div id="holiday-banner" class="holiday-banner hidden">
+    🎄 Holiday Sale — 20% off everything! Shop now before it ends! 🎄
+  </div>
+
+  <!-- ── Beta Search Bar (flag: beta-search) ───────────────────────────── -->
+  <section id="search-section" class="search-section hidden">
+    <div class="container">
+      <div class="search-wrap">
+        <input type="text" id="search-input" class="search-input"
+               placeholder="Search products…" autocomplete="off">
+        <span class="search-badge">BETA</span>
+      </div>
+    </div>
+  </section>
+
+  <!-- ── Main Content ───────────────────────────────────────────────────── -->
+  <main>
+    <div class="container">
+      <div class="page-header">
+        <h2>Our Products</h2>
+        <div class="view-toggle">
+          <button id="btn-list" class="view-btn active" title="List view">☰ List</button>
+          <button id="btn-grid" class="view-btn" title="Grid view">⊞ Grid</button>
+        </div>
+      </div>
+
+      <!-- AI Recommendations (flag: canary-recommendation-engine) -->
+      <section id="recommendations-section" class="recommendations-section hidden">
+        <h3>✨ Recommended for You <span class="ai-badge">AI · CANARY 20%</span></h3>
+        <div id="rec-row" class="rec-row"></div>
+      </section>
+
+      <!-- Product listing area -->
+      <div id="products-container" class="products-list">
+        <div class="loading"><span class="spinner"></span> Loading products…</div>
+      </div>
+    </div>
+  </main>
+
+  <!-- ── Footer ────────────────────────────────────────────────────────── -->
+  <footer class="footer">
+    <div class="container">
+      <p>
+        Acme Shop · Release on Demand Demo ·
+        Powered by <a href="https://openfeature.dev" target="_blank">OpenFeature</a>
+        + <a href="https://flagd.dev" target="_blank">flagd</a>
+      </p>
+    </div>
+  </footer>
+
+  <script src="/js/app.js"></script>
+</body>
+</html>

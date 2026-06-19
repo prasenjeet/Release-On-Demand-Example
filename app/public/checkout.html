@@ -1,0 +1,229 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Checkout — Acme Shop</title>
+  <link rel="stylesheet" href="/css/styles.css">
+</head>
+<body>
+
+  <header class="header">
+    <div class="container">
+      <div class="header-inner">
+        <span class="logo">🛒 Acme Shop</span>
+        <nav>
+          <a href="/">Products</a>
+          <a href="/checkout">Checkout</a>
+          <a href="/admin" class="admin-link">⚙ Feature Flags</a>
+        </nav>
+      </div>
+    </div>
+  </header>
+
+  <div class="feature-bar">
+    <div class="container">
+      <span class="feature-bar-label">Active Flags</span>
+      <div id="feature-badges" class="badges"><span class="badge badge-off">loading…</span></div>
+    </div>
+  </div>
+
+  <div class="checkout-page">
+    <div id="checkout-content">
+      <div class="loading"><span class="spinner"></span> Loading checkout…</div>
+    </div>
+  </div>
+
+  <footer class="footer">
+    <div class="container">
+      <p>Acme Shop · Release on Demand Demo ·
+        Powered by <a href="https://openfeature.dev" target="_blank">OpenFeature</a>
+        + <a href="https://flagd.dev" target="_blank">flagd</a>
+      </p>
+    </div>
+  </footer>
+
+  <script>
+    const userId = sessionStorage.getItem('userId') || 'anon';
+
+    async function loadCheckout() {
+      const res  = await fetch(`/api/flags?userId=${userId}`);
+      const flags = await res.json();
+      const isExpress = flags['express-checkout'];
+
+      // Update feature bar
+      document.getElementById('feature-badges').innerHTML = Object.entries(flags)
+        .map(([k,v]) => `<span class="badge ${v ? 'badge-on' : 'badge-off'}">${k}: ${v ? 'ON' : 'OFF'}</span>`)
+        .join('');
+
+      const cart = JSON.parse(sessionStorage.getItem('cart') || '[]');
+      const item = cart[0];
+      const subtotal = item ? item.price : 99;
+      const total   = subtotal + 9.99;
+
+      const orderSummary = `
+        <div class="order-summary">
+          <h4>Order Summary</h4>
+          ${item ? `<div class="order-line"><span>${item.emoji} ${item.name}</span><span>$${item.price}</span></div>` : ''}
+          <div class="order-line"><span>Shipping</span><span>$9.99</span></div>
+          <div class="order-line order-total"><span>Total</span><span>$${total.toFixed(2)}</span></div>
+        </div>`;
+
+      if (isExpress) {
+        document.getElementById('checkout-content').innerHTML = `
+          <h2>Express Checkout ⚡</h2>
+          <p class="checkout-subtitle">Fewer steps. Faster checkout.</p>
+          <div class="express-badge">⚡ Express Checkout — Feature Flag: ON</div>
+
+          <div class="checkout-form express-compact">
+            <div class="form-section">
+              <div class="form-section-title">👤 Contact</div>
+              <div class="form-row">
+                <div class="form-group">
+                  <label>Name</label>
+                  <input type="text" placeholder="Jane Doe" autocomplete="name">
+                </div>
+                <div class="form-group">
+                  <label>Email</label>
+                  <input type="email" placeholder="jane@example.com" autocomplete="email">
+                </div>
+              </div>
+            </div>
+            <div class="form-section">
+              <div class="form-section-title">📦 Ship To</div>
+              <div class="form-group">
+                <input type="text" placeholder="Address line 1" autocomplete="street-address">
+              </div>
+              <div class="form-row">
+                <div class="form-group"><input type="text" placeholder="City" autocomplete="address-level2"></div>
+                <div class="form-group"><input type="text" placeholder="ZIP / Postcode" autocomplete="postal-code"></div>
+              </div>
+            </div>
+            <div class="form-section">
+              <div class="form-section-title">💳 Payment</div>
+              <div class="form-group">
+                <input type="text" placeholder="Card number" autocomplete="cc-number">
+              </div>
+              <div class="form-row">
+                <div class="form-group"><input type="text" placeholder="MM / YY" autocomplete="cc-exp"></div>
+                <div class="form-group"><input type="text" placeholder="CVV" autocomplete="cc-csc"></div>
+              </div>
+              <p class="form-hint">💡 Express saves your details for next time.</p>
+            </div>
+            <div class="form-section">
+              ${orderSummary}
+              <br>
+              <button class="btn btn-success" onclick="placeOrder()">⚡ Place Order Now</button>
+            </div>
+          </div>`;
+      } else {
+        document.getElementById('checkout-content').innerHTML = `
+          <h2>Checkout</h2>
+          <p class="checkout-subtitle">Standard checkout — complete all sections below.</p>
+
+          <div class="checkout-form">
+            <div class="form-section">
+              <div class="form-section-title">1 · Personal Information</div>
+              <div class="form-row">
+                <div class="form-group">
+                  <label>First name</label>
+                  <input type="text" placeholder="Jane" autocomplete="given-name">
+                </div>
+                <div class="form-group">
+                  <label>Last name</label>
+                  <input type="text" placeholder="Doe" autocomplete="family-name">
+                </div>
+              </div>
+              <div class="form-group">
+                <label>Email address</label>
+                <input type="email" placeholder="jane@example.com" autocomplete="email">
+              </div>
+              <div class="form-group">
+                <label>Phone number</label>
+                <input type="tel" placeholder="+1 555 000 0000" autocomplete="tel">
+              </div>
+            </div>
+
+            <div class="form-section">
+              <div class="form-section-title">2 · Shipping Address</div>
+              <div class="form-group">
+                <label>Address line 1</label>
+                <input type="text" placeholder="123 Main Street" autocomplete="street-address">
+              </div>
+              <div class="form-group">
+                <label>Address line 2 (optional)</label>
+                <input type="text" placeholder="Apt, suite, etc." autocomplete="address-line2">
+              </div>
+              <div class="form-row">
+                <div class="form-group">
+                  <label>City</label>
+                  <input type="text" placeholder="New York" autocomplete="address-level2">
+                </div>
+                <div class="form-group">
+                  <label>ZIP / Postcode</label>
+                  <input type="text" placeholder="10001" autocomplete="postal-code">
+                </div>
+              </div>
+              <div class="form-group">
+                <label>Country</label>
+                <select autocomplete="country">
+                  <option>United States</option>
+                  <option>Canada</option>
+                  <option>United Kingdom</option>
+                  <option>Australia</option>
+                </select>
+              </div>
+            </div>
+
+            <div class="form-section">
+              <div class="form-section-title">3 · Shipping Method</div>
+              <div class="form-group">
+                <select>
+                  <option>Standard shipping (5–7 business days) — $9.99</option>
+                  <option>Express shipping (2–3 business days) — $19.99</option>
+                  <option>Overnight shipping — $39.99</option>
+                </select>
+              </div>
+            </div>
+
+            <div class="form-section">
+              <div class="form-section-title">4 · Payment Details</div>
+              <div class="form-group">
+                <label>Card number</label>
+                <input type="text" placeholder="0000 0000 0000 0000" autocomplete="cc-number">
+              </div>
+              <div class="form-group">
+                <label>Name on card</label>
+                <input type="text" placeholder="Jane Doe" autocomplete="cc-name">
+              </div>
+              <div class="form-row">
+                <div class="form-group">
+                  <label>Expiry date</label>
+                  <input type="text" placeholder="MM / YY" autocomplete="cc-exp">
+                </div>
+                <div class="form-group">
+                  <label>CVV</label>
+                  <input type="text" placeholder="123" autocomplete="cc-csc">
+                </div>
+              </div>
+            </div>
+
+            <div class="form-section">
+              ${orderSummary}
+              <br>
+              <button class="btn btn-primary" onclick="placeOrder()">Place Order →</button>
+            </div>
+          </div>`;
+      }
+    }
+
+    function placeOrder() {
+      sessionStorage.removeItem('cart');
+      alert('🎉 Order placed successfully!\n\nThis is a demo — no real order was created.');
+      window.location.href = '/';
+    }
+
+    loadCheckout();
+  </script>
+</body>
+</html>

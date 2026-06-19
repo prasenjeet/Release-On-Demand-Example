@@ -1,0 +1,64 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Feature Flag Admin — Acme Shop</title>
+  <link rel="stylesheet" href="/css/styles.css">
+</head>
+<body>
+
+  <header class="header">
+    <div class="container">
+      <div class="header-inner">
+        <span class="logo">🛒 Acme Shop</span>
+        <nav>
+          <a href="/">Products</a>
+          <a href="/checkout">Checkout</a>
+          <a href="/admin" class="admin-link">⚙ Feature Flags</a>
+        </nav>
+      </div>
+    </div>
+  </header>
+
+  <main>
+    <div class="container admin-page">
+      <h2>⚙ Feature Flag Management</h2>
+      <p class="admin-subtitle">
+        Toggle features on or off without deploying code.
+        Changes take effect immediately — flagd hot-reloads <code>flags/flags.json</code>.
+      </p>
+
+      <div class="concept-box">
+        <h3>📖 Release on Demand</h3>
+        <p>
+          Code is <strong>deployed continuously</strong> to production, but features are
+          <strong>released on demand</strong> via feature flags. This decouples deployment
+          from release, enabling:
+        </p>
+        <ul>
+          <li><strong>Dark launches</strong> — test with real traffic before users see it</li>
+          <li><strong>Canary releases</strong> — roll out to a % of users gradually</li>
+          <li><strong>Targeted rollouts</strong> — release to beta users by email or role</li>
+          <li><strong>Instant rollback</strong> — flip a flag, no deployment needed</li>
+        </ul>
+      </div>
+
+      <div id="flags-container" class="flags-grid">
+        <div class="loading"><span class="spinner"></span> Loading flags…</div>
+      </div>
+    </div>
+  </main>
+
+  <footer class="footer">
+    <div class="container">
+      <p>Acme Shop · Release on Demand Demo ·
+        Powered by <a href="https://openfeature.dev" target="_blank">OpenFeature</a>
+        + <a href="https://flagd.dev" target="_blank">flagd</a>
+      </p>
+    </div>
+  </footer>
+
+  <script src="/js/admin.js"></script>
+</body>
+</html>
