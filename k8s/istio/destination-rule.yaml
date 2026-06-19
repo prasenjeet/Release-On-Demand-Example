@@ -1,0 +1,33 @@
+apiVersion: networking.istio.io/v1beta1
+kind: DestinationRule
+metadata:
+  name: acme-api-destrule
+  namespace: production
+spec:
+  host: acme-api-stable
+  trafficPolicy:
+    tls:
+      mode: ISTIO_MUTUAL    # mTLS between services
+    connectionPool:
+      tcp:
+        maxConnections: 100
+      http:
+        http1MaxPendingRequests: 50
+        http2MaxRequests: 100
+    outlierDetection:
+      consecutive5xxErrors: 5
+      interval: 30s
+      baseEjectionTime: 30s
+      maxEjectionPercent: 25
+  subsets:
+    - name: stable
+      labels:
+        app: acme-api
+    - name: canary
+      labels:
+        app: acme-api
+      # Canary gets slightly looser circuit breaker to avoid premature ejection
+      trafficPolicy:
+        connectionPool:
+          http:
+            http1MaxPendingRequests: 25

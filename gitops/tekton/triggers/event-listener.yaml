@@ -1,0 +1,36 @@
+apiVersion: triggers.tekton.dev/v1beta1
+kind: EventListener
+metadata:
+  name: github-push
+  namespace: tekton-pipelines
+spec:
+  serviceAccountName: tekton-triggers-sa
+  triggers:
+    - name: github-push-main
+      interceptors:
+        # Validate GitHub webhook signature
+        - ref:
+            name: github
+            kind: ClusterInterceptor
+          params:
+            - name: secretRef
+              value:
+                secretName: github-webhook-secret
+                secretKey: secret
+            - name: eventTypes
+              value: ["push"]
+        # Only trigger on push to main branch
+        - ref:
+            name: cel
+            kind: ClusterInterceptor
+          params:
+            - name: filter
+              value: "body.ref == 'refs/heads/main'"
+            - name: overlays
+              value:
+                - key: git_sha_short
+                  expression: "body.after.truncate(7)"
+      bindings:
+        - ref: github-push-binding
+      template:
+        ref: acme-api-pipeline-template

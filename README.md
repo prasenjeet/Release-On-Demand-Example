@@ -1,121 +1,177 @@
-# Release on Demand — Sample Project
+# Release on Demand — Production-Grade Sample Project
 
-A runnable demo showing how to decouple **deployment** from **release** using open-source tools.
-
-Code is continuously deployed to production. Features are hidden behind feature flags and released deliberately — no deployment required.
+A complete, runnable demonstration of the Release on Demand pattern using
+open-source Kubernetes-native tools. Every layer is real and wired together.
 
 ---
 
-## Architecture
+## The Stack
 
 ```
-┌──────────────────────────────────────────────────────────────────┐
-│                        Docker Compose                            │
-│                                                                  │
-│  ┌──────────────────────┐   gRPC   ┌───────────────────────┐    │
-│  │   Node.js / Express  │ ◄──────► │        flagd           │    │
-│  │   (Acme Shop app)    │  :8013   │  Feature flag daemon   │    │
-│  │        :3000         │          │  :8013 gRPC / :8016 HTTP│   │
-│  └──────────────────────┘          └──────────┬────────────┘    │
-│                                               │ watches file     │
-│                                   ┌───────────▼────────────┐    │
-│                                   │   flags/flags.json      │    │
-│                                   │  (hot-reloaded on edit) │    │
-│                                   └────────────────────────┘    │
-└──────────────────────────────────────────────────────────────────┘
+Code Merge (GitHub)
+        │
+        ▼
+┌───────────────────┐
+│  Tekton Pipelines │  CI: clone → test → build image → push → update gitops
+└────────┬──────────┘
+         │  git commit (new image tag in kustomization.yaml)
+         ▼
+┌───────────────────┐
+│     ArgoCD        │  CD: detects git drift → syncs Rollout to cluster
+└────────┬──────────┘
+         │  Argo Rollout CR applied
+         ▼
+┌───────────────────┐
+│  Argo Rollouts    │  Canary: 5% → analysis → 20% → analysis → 50% → PAUSE
+└────────┬──────────┘
+         │  Istio VirtualService weights patched per step
+         ▼
+┌────────────────────────┐
+│  Istio / Flagger       │  Traffic: weight-based routing, mTLS, retries
+└────────┬───────────────┘
+         │  metrics scraped every 15s
+         ▼
+┌───────────────────────────────────────────────────────┐
+│  Prometheus + Grafana                                  │
+│  AnalysisTemplate gates: success_rate ≥ 99%            │
+│                          p99_latency < 500ms           │
+│  Auto-rollback on failure. Dashboard shows live diff.  │
+└────────┬──────────────────────────────────────────────┘
+         │  canary promoted (metrics passed, PAUSED step reached)
+         │  CODE IS DEPLOYED. FEATURES STILL HIDDEN.
+         ▼
+┌───────────────────────────────────────────────────────┐ ← ROD HERE
+│  Unleash Feature Flags                                 │
+│  Business decision: PM / Release Manager              │
+│    Toggle "new-product-catalog" → ON                  │
+│    Toggle "holiday-promotion"   → ON (sale!)          │
+│    Toggle "ai-recommendations"  → ON (beta users)     │
+│                                                        │
+│  Zero deployment. Instant. Instantly reversible.       │
+└───────────────────────────────────────────────────────┘
 ```
 
-### Open-source tools
+---
 
-| Tool | Role |
-|------|------|
-| [OpenFeature SDK](https://openfeature.dev) | Vendor-neutral feature flag standard (CNCF) |
-| [flagd](https://flagd.dev) | Open-source flag evaluation daemon |
-| [Express.js](https://expressjs.com) | Web framework |
-| [Docker Compose](https://docs.docker.com/compose) | Local orchestration |
-| [GitHub Actions](https://github.com/features/actions) | CI/CD pipeline |
+## Open-Source Tools
+
+| Tool | Version | Role |
+|------|---------|------|
+| [Tekton Pipelines](https://tekton.dev) | v0.58+ | CI — build, test, push |
+| [Tekton Triggers](https://tekton.dev/docs/triggers) | v0.26+ | GitHub webhook → PipelineRun |
+| [ArgoCD](https://argo-cd.readthedocs.io) | v2.10+ | GitOps CD |
+| [Argo Rollouts](https://argoproj.github.io/rollouts) | v1.7+ | Canary / Blue-Green |
+| [Istio](https://istio.io) | v1.21+ | Service mesh, traffic splitting |
+| [Flagger](https://flagger.app) | v1.38+ | Alternative progressive delivery |
+| [Unleash](https://unleash.io) | v6+ | Self-hosted feature flags |
+| [Prometheus](https://prometheus.io) | v2.51+ | Metrics + canary analysis |
+| [Grafana](https://grafana.com) | v10.4+ | Dashboards |
+
+All tools are Apache 2.0 licensed (Grafana is AGPL 3.0).
 
 ---
 
-## Feature Flags in This Demo
+## Quick Start (Local Demo)
 
-| Flag | Pattern | Description |
-|------|---------|-------------|
-| `new-product-layout` | Release gate | Card grid layout (deployed, not released) |
-| `express-checkout` | Release gate | Single-page checkout flow |
-| `holiday-promotion` | Scheduled release | 20% sale banner — flip on for campaigns |
-| `beta-search` | Targeted rollout | Real-time search for specific user emails |
-| `canary-recommendation-engine` | Canary (20%) | AI recommendations for 20% of users |
-
----
-
-## Quick Start
-
-**Prerequisites:** Docker + Docker Compose
+**Requirements:** Docker + Docker Compose v2
 
 ```bash
-git clone https://github.com/prasenjeet/release-on-demand-example.git
+git clone https://github.com/org/release-on-demand-example.git
 cd release-on-demand-example
-docker compose up --build
+./scripts/setup-local.sh
 ```
 
-Open:
-- **Shop:** http://localhost:3000
-- **Admin (flag toggle UI):** http://localhost:3000/admin
+**Access points after startup:**
+
+| Service | URL | Credentials |
+|---------|-----|-------------|
+| API (load-balanced) | http://localhost:8080/api/products | — |
+| Stable direct | http://localhost:8081/api/products | — |
+| Canary direct | http://localhost:8082/api/products | — |
+| **Unleash** (feature flags) | http://localhost:4242 | admin / unleash4all |
+| Prometheus | http://localhost:9090 | — |
+| **Grafana** | http://localhost:3000 | admin / admin |
 
 ---
 
-## Hands-on Demo
+## Hands-On Demo Walkthrough
 
-### 1. See the default state
-
-Visit http://localhost:3000 — you'll see the basic product list with all flags OFF.
-The feature bar at the top shows every flag's current state.
-
-### 2. Release the new product layout
-
-In the admin panel, flip **`new-product-layout` → ON**.
-
-Go back to the shop. The products are now shown as a card grid — no deployment, no downtime.
-
-### 3. Enable express checkout
-
-Flip **`express-checkout` → ON**.
-
-Click "Add to Cart" on any product. Instead of a multi-step form you're taken straight to a compact express checkout. Flip it back OFF to instantly revert.
-
-### 4. Launch a holiday sale
-
-Flip **`holiday-promotion` → ON**.
-
-A holiday banner appears and every price drops by 20%. This is how a time-limited campaign is launched in seconds — the code was already deployed, waiting behind the flag.
-
-### 5. Try canary targeting
-
-The `canary-recommendation-engine` flag uses percentage-based targeting: 20% of users (deterministically by user ID) see AI recommendations. Open the shop in multiple private browser windows — some will show the recommendation row, others won't.
-
-### 6. Test targeted rollout
-
-The `beta-search` flag evaluates the user's email. Append `?email=beta@example.com` to the URL: http://localhost:3000?email=beta@example.com — the search bar appears only for that address.
-
----
-
-## Toggle Flags from the Command Line
-
-Requires `jq` (`brew install jq` / `apt install jq`):
+### Step 1 — Observe the baseline
 
 ```bash
-# Turn a flag on
-./scripts/toggle-flag.sh new-product-layout on
+# Stable returns 4 products, v1.0.0
+curl http://localhost:8081/api/products | jq '.meta'
 
-# Turn a flag off
-./scripts/toggle-flag.sh holiday-promotion off
-
-# Show available flags
-./scripts/toggle-flag.sh
+# Canary returns 4 products too — new catalog is hidden behind a flag
+curl http://localhost:8082/api/products | jq '.meta'
 ```
 
-flagd watches `flags/flags.json` and hot-reloads it automatically.
+### Step 2 — Simulate canary traffic shift (5% → canary)
+
+Traffic is controlled by `nginx/nginx.conf` locally (Istio VirtualService in Kubernetes).
+
+```bash
+./scripts/promote-canary.sh --step 5
+```
+
+Watch the Grafana dashboard at http://localhost:3000 — you'll see the canary
+line appear with a small fraction of requests.
+
+### Step 3 — Verify metrics gate (Prometheus)
+
+```bash
+# Check success rates
+curl -s 'http://localhost:9090/api/v1/query?query=canary:http_success_rate:5m' \
+  | jq '.data.result'
+
+# Check latency comparison
+curl -s 'http://localhost:9090/api/v1/query?query=canary:http_latency_p99:5m' \
+  | jq '.data.result'
+```
+
+Both should show the canary is within thresholds — Argo Rollouts would
+proceed to the next step automatically.
+
+### Step 4 — Promote to 50%, then 100%
+
+```bash
+./scripts/promote-canary.sh --step 50
+sleep 30
+./scripts/promote-canary.sh --step 100
+```
+
+The new version is now serving all traffic. But the new features are still off.
+
+### Step 5 — Business Release Decision (Release on Demand)
+
+Open Unleash at http://localhost:4242 and log in.
+
+Toggle these flags ON one at a time and call the API after each:
+
+1. **`new-product-catalog`** → products jump from 4 to 7 items (no deploy!)
+2. **`holiday-promotion`** → 20% discount appears on all products
+3. **`ai-recommendations`** → recommendation rows appear in response
+
+```bash
+# After enabling new-product-catalog:
+curl http://localhost:8082/api/products | jq '.products | length'
+# → 7  (was 4)
+
+# After enabling holiday-promotion:
+curl http://localhost:8082/api/products | jq '.products[0] | {price, discount}'
+# → {"price": 1039, "discount": 20}
+```
+
+### Step 6 — Emergency rollback (instant)
+
+```bash
+# Roll back traffic (nginx locally, Argo Rollouts abort in K8s)
+./scripts/rollback.sh
+
+# Roll back a feature flag (no deployment)
+curl -X POST http://localhost:4242/api/admin/features/holiday-promotion/toggle/off \
+  -H "Authorization: *:*.unleash-insecure-api-token"
+```
 
 ---
 
@@ -123,39 +179,83 @@ flagd watches `flags/flags.json` and hot-reloads it automatically.
 
 ```
 .
-├── app/                        # Node.js application
+├── app/                        # Acme API — Node.js microservice
 │   ├── src/
 │   │   ├── index.js            # Entry point
-│   │   ├── server.js           # Express setup
-│   │   ├── featureFlags.js     # OpenFeature SDK init
-│   │   └── routes/api.js       # API routes (flags, products, admin)
-│   ├── public/                 # Frontend (HTML + vanilla JS)
-│   │   ├── index.html          # Shop page
-│   │   ├── checkout.html       # Checkout (standard vs express)
-│   │   ├── admin.html          # Flag management UI
-│   │   ├── css/styles.css
-│   │   └── js/
-│   │       ├── app.js          # Shop feature-flag logic
-│   │       └── admin.js        # Admin toggle UI
-│   ├── test/
-│   │   └── server.test.js      # API + static page tests
-│   ├── Dockerfile
-│   └── package.json
-├── flags/
-│   └── flags.json              # Feature flag definitions (edit to toggle)
-├── scripts/
-│   └── toggle-flag.sh          # CLI helper for toggling flags
-├── .github/workflows/
-│   ├── ci.yml                  # Build + test on every push/PR
-│   └── deploy.yml              # Build image + deploy on main push
-├── docs/
-│   └── concepts.md             # Deep-dive into Release on Demand patterns
-└── docker-compose.yml
+│   │   ├── server.js           # Express setup + metrics middleware
+│   │   ├── featureFlags.js     # Unleash SDK integration
+│   │   ├── middleware/metrics.js  # Prometheus counters + histograms
+│   │   └── routes/
+│   │       ├── products.js     # /api/products — flag-gated responses
+│   │       └── health.js       # /health /ready /metrics
+│   ├── test/server.test.js
+│   └── Dockerfile
+│
+├── k8s/                        # Kubernetes manifests
+│   ├── base/                   # Kustomize base (service, sa, configmap)
+│   ├── overlays/               # Production + staging overlays
+│   ├── argo-rollouts/          # Rollout CR + AnalysisTemplates
+│   │   ├── rollout.yaml        # ← Canary steps + Istio integration
+│   │   ├── analysis-success-rate.yaml
+│   │   └── analysis-latency.yaml
+│   ├── istio/                  # Gateway + VirtualService + DestinationRule
+│   ├── flagger/                # Alternative: Flagger Canary + MetricTemplate
+│   ├── unleash/                # Unleash + PostgreSQL StatefulSet
+│   └── monitoring/             # ServiceMonitor + PrometheusRule
+│
+├── gitops/
+│   ├── argocd/                 # ArgoCD Project + Application + App-of-Apps
+│   └── tekton/                 # Pipeline + Tasks + Triggers + RBAC
+│
+├── monitoring/
+│   ├── prometheus/             # Config + recording/alerting rules
+│   └── grafana/                # Dashboard JSON + provisioning
+│
+├── nginx/nginx.conf            # Local traffic splitter (simulates Istio)
+├── docker-compose.yml          # Full local demo stack
+└── scripts/
+    ├── setup-local.sh          # One-command local startup
+    ├── trigger-release.sh      # Business-triggered release (K8s)
+    ├── promote-canary.sh       # Simulate canary promotion (local)
+    └── rollback.sh             # Emergency rollback (local or K8s)
 ```
 
 ---
 
-## Running Tests
+## Kubernetes Deployment
+
+### Bootstrap the platform
+
+```bash
+# 1. Create namespaces and install controllers (see docs/runbook.md)
+
+# 2. Create required secrets
+kubectl create secret generic unleash-credentials \
+  --from-literal=api-token="your-token" -n production
+
+# 3. Bootstrap App-of-Apps
+kubectl apply -f gitops/argocd/app-of-apps.yaml -n argocd
+
+# 4. Watch ArgoCD converge
+argocd app list
+```
+
+### Monitor a live canary
+
+```bash
+# Real-time rollout status
+kubectl argo rollouts get rollout acme-api -n production --watch
+
+# Promote when ready (after PAUSE step)
+./scripts/trigger-release.sh --flag new-product-catalog
+```
+
+See [docs/runbook.md](docs/runbook.md) for full operational procedures.  
+See [docs/architecture.md](docs/architecture.md) for component deep-dive.
+
+---
+
+## Tests
 
 ```bash
 cd app
@@ -163,24 +263,18 @@ npm install
 npm test
 ```
 
-Tests mock flagd so they run without any external dependencies.
+Tests mock Unleash and Prometheus so they run with no external dependencies.
 
 ---
 
-## The Core Principle
+## The Key Insight
 
 ```
-Git push  →  CI green  →  Image deployed to production
-                                        ↓
-                    Code is LIVE — features are HIDDEN (flags OFF)
-                                        ↓
-                    Release Manager flips flag ON (no deploy needed)
-                                        ↓
-                         Feature is RELEASED to users ✓
-                                        ↓
-                    Something wrong? Flip flag OFF — instant rollback ✓
+Traditional:  deploy = release    (coupled, scary, big-bang)
+
+Release on Demand:
+  deploy ≠ release
+
+  deploy  = code arrives in production (automatic, safe, gradual, metric-gated)
+  release = users see the feature     (deliberate, business-timed, instant-reversible)
 ```
-
-This is **Release on Demand**: deploy continuously, release deliberately.
-
-See [`docs/concepts.md`](docs/concepts.md) for a detailed breakdown of each release pattern.

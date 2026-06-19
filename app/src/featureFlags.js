@@ -1,28 +1,63 @@
-const { OpenFeature } = require('@openfeature/server-sdk');
-const { FlagdProvider } = require('@openfeature/flagd-provider');
+const { initialize, InMemStorageProvider } = require('unleash-client');
 
-let client = null;
+let unleash = null;
+
+const CATALOG_V1 = [
+  { id: 1, name: 'Laptop Pro',          price: 1299, category: 'Electronics', emoji: '💻' },
+  { id: 2, name: 'Wireless Headphones', price: 199,  category: 'Electronics', emoji: '🎧' },
+  { id: 3, name: 'Coffee Maker',        price: 89,   category: 'Kitchen',     emoji: '☕' },
+  { id: 4, name: 'Running Shoes',       price: 149,  category: 'Sports',      emoji: '👟' },
+];
+
+const CATALOG_V2_EXTRAS = [
+  { id: 5, name: 'Smart Watch',    price: 299, category: 'Electronics', emoji: '⌚' },
+  { id: 6, name: 'Yoga Mat',       price: 45,  category: 'Sports',      emoji: '🧘' },
+  { id: 7, name: 'Air Purifier',   price: 199, category: 'Home',        emoji: '🌬️' },
+];
 
 async function init() {
-  const host = process.env.FLAGD_HOST || 'localhost';
-  const port = Number(process.env.FLAGD_PORT) || 8013;
+  const url   = process.env.UNLEASH_URL   || 'http://unleash:4242/api';
+  const token = process.env.UNLEASH_TOKEN || '*:*.unleash-insecure-api-token';
 
   try {
-    await OpenFeature.setProviderAndWait(
-      new FlagdProvider({ host, port, tls: false })
-    );
-    console.log(`Connected to flagd at ${host}:${port}`);
+    unleash = initialize({
+      url,
+      appName: 'acme-api',
+      customHeaders: { Authorization: token },
+      // Use in-memory store for resilience — no file system needed
+      storageProvider: new InMemStorageProvider(),
+    });
+    await unleash.start();
+    console.log(`Unleash connected at ${url}`);
   } catch (err) {
-    console.warn(`Could not connect to flagd (${err.message}) — flags will return defaults`);
+    console.warn(`Unleash unavailable (${err.message}) — all flags default to OFF`);
   }
-
-  client = OpenFeature.getClient('acme-shop');
-  return client;
 }
 
-function getClient() {
-  if (!client) throw new Error('Feature flags not initialized. Call init() first.');
-  return client;
+function isEnabled(flagName, context = {}) {
+  if (!unleash) return false;
+  try {
+    return unleash.isEnabled(flagName, context);
+  } catch {
+    return false;
+  }
 }
 
-module.exports = { init, getClient };
+function getProducts(context = {}) {
+  const useNewCatalog = isEnabled('new-product-catalog', context);
+  return useNewCatalog ? [...CATALOG_V1, ...CATALOG_V2_EXTRAS] : CATALOG_V1;
+}
+
+function getRecommendations(context = {}) {
+  if (!isEnabled('ai-recommendations', context)) return [];
+  return [
+    { ...CATALOG_V1[0], reason: 'Most popular this week' },
+    { ...CATALOG_V2_EXTRAS[0], reason: 'Trending in Electronics' },
+  ];
+}
+
+function getHolidayDiscount(context = {}) {
+  return isEnabled('holiday-promotion', context) ? 20 : 0;
+}
+
+module.exports = { init, isEnabled, getProducts, getRecommendations, getHolidayDiscount };

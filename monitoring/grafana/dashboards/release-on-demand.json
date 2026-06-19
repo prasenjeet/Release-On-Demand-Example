@@ -1,0 +1,289 @@
+{
+  "__inputs": [],
+  "__requires": [
+    { "type": "grafana", "id": "grafana", "name": "Grafana", "version": "10.0.0" },
+    { "type": "datasource", "id": "prometheus", "name": "Prometheus", "version": "1.0.0" }
+  ],
+  "annotations": { "list": [] },
+  "description": "Release on Demand — Canary Deployment & Feature Flag Dashboard",
+  "editable": true,
+  "fiscalYearStartMonth": 0,
+  "graphTooltip": 1,
+  "id": null,
+  "links": [],
+  "liveNow": false,
+  "panels": [
+    {
+      "collapsed": false,
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 0 },
+      "id": 100,
+      "title": "🚀 Canary Deployment Status",
+      "type": "row"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "thresholds" },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "green", "value": null },
+              { "color": "yellow", "value": 10 },
+              { "color": "orange", "value": 50 },
+              { "color": "red", "value": 100 }
+            ]
+          },
+          "unit": "percent",
+          "mappings": []
+        }
+      },
+      "gridPos": { "h": 6, "w": 6, "x": 0, "y": 1 },
+      "id": 1,
+      "options": {
+        "reduceOptions": { "calcs": ["lastNotNull"] },
+        "orientation": "auto",
+        "showThresholdLabels": false,
+        "showThresholdMarkers": true
+      },
+      "title": "Canary Traffic Weight",
+      "type": "gauge",
+      "targets": [
+        {
+          "expr": "sum(canary:http_rps:1m{role=\"canary\"}) / sum(canary:http_rps:1m) * 100",
+          "legendFormat": "Canary %",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "thresholds" },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "red", "value": null },
+              { "color": "yellow", "value": 95 },
+              { "color": "green", "value": 99 }
+            ]
+          },
+          "unit": "percentunit",
+          "min": 0.9,
+          "max": 1
+        }
+      },
+      "gridPos": { "h": 3, "w": 6, "x": 6, "y": 1 },
+      "id": 2,
+      "options": {
+        "reduceOptions": { "calcs": ["lastNotNull"] },
+        "orientation": "auto"
+      },
+      "title": "Stable — Success Rate",
+      "type": "stat",
+      "targets": [
+        {
+          "expr": "canary:http_success_rate:5m{role=\"stable\"}",
+          "legendFormat": "Stable",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "thresholds" },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "red", "value": null },
+              { "color": "yellow", "value": 95 },
+              { "color": "green", "value": 99 }
+            ]
+          },
+          "unit": "percentunit",
+          "min": 0.9,
+          "max": 1
+        }
+      },
+      "gridPos": { "h": 3, "w": 6, "x": 12, "y": 1 },
+      "id": 3,
+      "options": {
+        "reduceOptions": { "calcs": ["lastNotNull"] },
+        "orientation": "auto"
+      },
+      "title": "Canary — Success Rate",
+      "type": "stat",
+      "targets": [
+        {
+          "expr": "canary:http_success_rate:5m{role=\"canary\"}",
+          "legendFormat": "Canary",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "thresholds" },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "green", "value": null },
+              { "color": "yellow", "value": 0.25 },
+              { "color": "red", "value": 0.5 }
+            ]
+          },
+          "unit": "s"
+        }
+      },
+      "gridPos": { "h": 3, "w": 6, "x": 18, "y": 1 },
+      "id": 4,
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"] } },
+      "title": "Canary — P99 Latency",
+      "type": "stat",
+      "targets": [
+        {
+          "expr": "canary:http_latency_p99:5m{role=\"canary\"}",
+          "legendFormat": "Canary P99",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": {
+        "defaults": { "unit": "percentunit", "min": 0.9, "max": 1 },
+        "overrides": [
+          { "matcher": { "id": "byName", "options": "Stable" }, "properties": [{ "id": "color", "value": { "fixedColor": "blue", "mode": "fixed" } }] },
+          { "matcher": { "id": "byName", "options": "Canary" }, "properties": [{ "id": "color", "value": { "fixedColor": "orange", "mode": "fixed" } }] }
+        ]
+      },
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 7 },
+      "id": 5,
+      "options": { "tooltip": { "mode": "multi" }, "legend": { "displayMode": "list", "placement": "bottom" } },
+      "title": "Success Rate: Stable vs Canary",
+      "type": "timeseries",
+      "targets": [
+        {
+          "expr": "canary:http_success_rate:5m{role=\"stable\"}",
+          "legendFormat": "Stable",
+          "refId": "A"
+        },
+        {
+          "expr": "canary:http_success_rate:5m{role=\"canary\"}",
+          "legendFormat": "Canary",
+          "refId": "B"
+        },
+        {
+          "expr": "vector(0.99)",
+          "legendFormat": "SLO Threshold (99%)",
+          "refId": "C"
+        }
+      ]
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": {
+        "defaults": { "unit": "s" },
+        "overrides": [
+          { "matcher": { "id": "byName", "options": "Stable P99" }, "properties": [{ "id": "color", "value": { "fixedColor": "blue", "mode": "fixed" } }] },
+          { "matcher": { "id": "byName", "options": "Canary P99" }, "properties": [{ "id": "color", "value": { "fixedColor": "orange", "mode": "fixed" } }] },
+          { "matcher": { "id": "byName", "options": "Stable P50" }, "properties": [{ "id": "custom.lineStyle", "value": { "dash": [10, 10], "fill": "dash" } }] }
+        ]
+      },
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 7 },
+      "id": 6,
+      "options": { "tooltip": { "mode": "multi" }, "legend": { "displayMode": "list", "placement": "bottom" } },
+      "title": "Latency: Stable vs Canary",
+      "type": "timeseries",
+      "targets": [
+        {
+          "expr": "canary:http_latency_p99:5m{role=\"stable\"}",
+          "legendFormat": "Stable P99",
+          "refId": "A"
+        },
+        {
+          "expr": "canary:http_latency_p99:5m{role=\"canary\"}",
+          "legendFormat": "Canary P99",
+          "refId": "B"
+        },
+        {
+          "expr": "canary:http_latency_p50:5m{role=\"stable\"}",
+          "legendFormat": "Stable P50",
+          "refId": "C"
+        },
+        {
+          "expr": "vector(0.5)",
+          "legendFormat": "Threshold (500ms)",
+          "refId": "D"
+        }
+      ]
+    },
+    {
+      "collapsed": false,
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 15 },
+      "id": 101,
+      "title": "🚦 Feature Flags (Unleash)",
+      "type": "row"
+    },
+    {
+      "datasource": null,
+      "gridPos": { "h": 6, "w": 24, "x": 0, "y": 16 },
+      "id": 7,
+      "options": {
+        "code": {
+          "language": "plaintext",
+          "showLineNumbers": false
+        },
+        "content": "## Feature Flag Status\n\nFeature flags are managed via **Unleash** at `http://localhost:4242`.\n\n| Flag | Default | Pattern |\n|------|---------|---------|  \n| `new-product-catalog` | OFF | Release gate — flip ON to release v2 catalog |\n| `ai-recommendations` | OFF | Targeted — beta users by userId |\n| `holiday-promotion` | OFF | Scheduled — business-triggered discount campaign |\n| `express-checkout` | OFF | Gradual — 20% session-based rollout |\n\n> **Release on Demand**: Code is already deployed (canary promoted). Features remain hidden here until a business decision is made to release them. No deployment required.",
+        "mode": "markdown"
+      },
+      "title": "Feature Flag Reference",
+      "type": "text"
+    },
+    {
+      "collapsed": false,
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 22 },
+      "id": 102,
+      "title": "📈 Traffic Distribution",
+      "type": "row"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": {
+        "defaults": { "unit": "reqps" }
+      },
+      "gridPos": { "h": 8, "w": 24, "x": 0, "y": 23 },
+      "id": 8,
+      "options": { "tooltip": { "mode": "multi" }, "legend": { "displayMode": "list", "placement": "bottom" } },
+      "title": "Requests per Second — Stable vs Canary",
+      "type": "timeseries",
+      "targets": [
+        {
+          "expr": "canary:http_rps:1m{role=\"stable\"}",
+          "legendFormat": "Stable ({{ version }})",
+          "refId": "A"
+        },
+        {
+          "expr": "canary:http_rps:1m{role=\"canary\"}",
+          "legendFormat": "Canary ({{ version }})",
+          "refId": "B"
+        }
+      ]
+    }
+  ],
+  "refresh": "30s",
+  "schemaVersion": 38,
+  "tags": ["release-on-demand", "canary", "feature-flags"],
+  "templating": { "list": [] },
+  "time": { "from": "now-1h", "to": "now" },
+  "timepicker": {},
+  "timezone": "browser",
+  "title": "Release on Demand",
+  "uid": "rod-main",
+  "version": 1
+}

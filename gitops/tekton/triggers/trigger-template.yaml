@@ -1,0 +1,42 @@
+apiVersion: triggers.tekton.dev/v1beta1
+kind: TriggerTemplate
+metadata:
+  name: acme-api-pipeline-template
+  namespace: tekton-pipelines
+spec:
+  params:
+    - name: git-url
+    - name: git-revision
+    - name: image-tag
+
+  resourcetemplates:
+    - apiVersion: tekton.dev/v1
+      kind: PipelineRun
+      metadata:
+        generateName: acme-api-ci-
+        namespace: tekton-pipelines
+        labels:
+          tekton.dev/pipeline: acme-api-ci
+      spec:
+        pipelineRef:
+          name: acme-api-ci
+        timeouts:
+          pipeline: 30m
+        params:
+          - name: git-url
+            value: $(tt.params.git-url)
+          - name: git-revision
+            value: $(tt.params.git-revision)
+          - name: image-tag
+            value: $(tt.params.image-tag)
+        workspaces:
+          - name: source
+            volumeClaimTemplate:
+              spec:
+                accessModes: [ReadWriteOnce]
+                resources:
+                  requests:
+                    storage: 1Gi
+          - name: docker-credentials
+            secret:
+              secretName: ghcr-push-credentials

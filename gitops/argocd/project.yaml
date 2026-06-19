@@ -1,0 +1,62 @@
+apiVersion: argoproj.io/v1alpha1
+kind: AppProject
+metadata:
+  name: acme
+  namespace: argocd
+spec:
+  description: "Acme Shop — Release on Demand Platform"
+
+  sourceRepos:
+    - "https://github.com/org/release-on-demand-example.git"
+
+  destinations:
+    - namespace: production
+      server: https://kubernetes.default.svc
+    - namespace: staging
+      server: https://kubernetes.default.svc
+    - namespace: feature-flags
+      server: https://kubernetes.default.svc
+    - namespace: monitoring
+      server: https://kubernetes.default.svc
+
+  # Restrict what resource types this project can deploy
+  clusterResourceWhitelist:
+    - group: ""
+      kind: Namespace
+
+  namespaceResourceWhitelist:
+    - group: "argoproj.io"
+      kind: Rollout
+    - group: "argoproj.io"
+      kind: AnalysisTemplate
+    - group: "networking.istio.io"
+      kind: VirtualService
+    - group: "networking.istio.io"
+      kind: DestinationRule
+    - group: "networking.istio.io"
+      kind: Gateway
+    - group: "flagger.app"
+      kind: Canary
+    - group: "monitoring.coreos.com"
+      kind: ServiceMonitor
+    - group: "monitoring.coreos.com"
+      kind: PrometheusRule
+    - group: "apps"
+      kind: Deployment
+    - group: "apps"
+      kind: StatefulSet
+    - group: ""
+      kind: Service
+    - group: ""
+      kind: ConfigMap
+    - group: ""
+      kind: ServiceAccount
+    - group: "autoscaling"
+      kind: HorizontalPodAutoscaler
+
+  roles:
+    - name: release-manager
+      description: Can promote / sync releases
+      policies:
+        - p, proj:acme:release-manager, applications, sync, acme/*, allow
+        - p, proj:acme:release-manager, applications, get, acme/*, allow

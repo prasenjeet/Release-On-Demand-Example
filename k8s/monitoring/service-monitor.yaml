@@ -1,0 +1,19 @@
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: acme-api
+  namespace: production
+  labels:
+    release: prometheus          # must match Prometheus Operator selector
+spec:
+  selector:
+    matchLabels:
+      app: acme-api
+  endpoints:
+    - port: http
+      path: /metrics
+      interval: 15s
+      scrapeTimeout: 10s
+  namespaceSelector:
+    matchNames:
+      - production

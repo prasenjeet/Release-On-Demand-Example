@@ -1,0 +1,128 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: unleash
+  namespace: feature-flags
+  labels:
+    app: unleash
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: unleash
+  template:
+    metadata:
+      labels:
+        app: unleash
+    spec:
+      initContainers:
+        # Wait for Postgres before starting Unleash
+        - name: wait-for-postgres
+          image: busybox:1.36
+          command:
+            - sh
+            - -c
+            - |
+              until nc -z unleash-postgres.feature-flags.svc.cluster.local 5432; do
+                echo "Waiting for Postgres..."
+                sleep 2
+              done
+      containers:
+        - name: unleash
+          image: unleashorg/unleash-server:6
+          ports:
+            - name: http
+              containerPort: 4242
+          env:
+            - name: DATABASE_URL
+              valueFrom:
+                secretKeyRef:
+                  name: unleash-db-url
+                  key: url
+            - name: LOG_LEVEL
+              value: warn
+            - name: INIT_ADMIN_API_TOKENS
+              valueFrom:
+                secretKeyRef:
+                  name: unleash-credentials
+                  key: api-token
+            # Import initial flags on first run
+            - name: IMPORT_FILE
+              value: /etc/unleash/initial-toggles.json
+          volumeMounts:
+            - name: initial-flags
+              mountPath: /etc/unleash
+          resources:
+            requests:
+              cpu: "100m"
+              memory: "256Mi"
+            limits:
+              cpu: "1"
+              memory: "1Gi"
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 4242
+            initialDelaySeconds: 20
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 4242
+            initialDelaySeconds: 30
+            periodSeconds: 30
+      volumes:
+        - name: initial-flags
+          configMap:
+            name: unleash-initial-flags
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: unleash-initial-flags
+  namespace: feature-flags
+data:
+  initial-toggles.json: |
+    {
+      "version": 1,
+      "features": [
+        {
+          "name": "new-product-catalog",
+          "description": "Enable extended product catalog (7 items vs 4). Deploy first, release when ready.",
+          "type": "release",
+          "enabled": false,
+          "strategies": [{"name": "default", "parameters": {}}]
+        },
+        {
+          "name": "ai-recommendations",
+          "description": "Show AI-powered product recommendations. Rolled out to beta users first.",
+          "type": "release",
+          "enabled": false,
+          "strategies": [
+            {
+              "name": "userWithId",
+              "parameters": { "userIds": "beta-tester-1,beta-tester-2,qa-1" }
+            }
+          ]
+        },
+        {
+          "name": "holiday-promotion",
+          "description": "20% discount across all products. Business toggles this for campaigns.",
+          "type": "release",
+          "enabled": false,
+          "strategies": [{"name": "default", "parameters": {}}]
+        },
+        {
+          "name": "express-checkout",
+          "description": "Streamlined checkout flow. Gradual rollout by user percentage.",
+          "type": "release",
+          "enabled": false,
+          "strategies": [
+            {
+              "name": "gradualRolloutSessionId",
+              "parameters": { "percentage": "20", "groupId": "express-checkout" }
+            }
+          ]
+        }
+      ]
+    }

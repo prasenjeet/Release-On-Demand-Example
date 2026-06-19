@@ -1,49 +1,48 @@
 const request = require('supertest');
-const path = require('path');
 
-// ── Mock feature flags so tests don't need a real flagd ──────────────────────
 jest.mock('../src/featureFlags', () => ({
-  init: jest.fn().mockResolvedValue({}),
-  getClient: jest.fn().mockReturnValue({
-    getBooleanValue: jest.fn().mockResolvedValue(false),
-    getStringValue:  jest.fn().mockResolvedValue(''),
-    getNumberValue:  jest.fn().mockResolvedValue(0),
-  }),
+  init: jest.fn().mockResolvedValue(undefined),
+  isEnabled: jest.fn().mockReturnValue(false),
+  getProducts: jest.fn().mockReturnValue([
+    { id: 1, name: 'Laptop Pro', price: 1299, category: 'Electronics', emoji: '💻' },
+    { id: 2, name: 'Headphones', price: 199,  category: 'Electronics', emoji: '🎧' },
+  ]),
+  getRecommendations: jest.fn().mockReturnValue([]),
+  getHolidayDiscount: jest.fn().mockReturnValue(0),
 }));
-
-// Override flags file path to use the fixture in this directory
-process.env.FLAGS_FILE = path.join(__dirname, 'fixtures/flags.json');
 
 const { app, setupRoutes } = require('../src/server');
 setupRoutes();
 
-// ── /api/flags ────────────────────────────────────────────────────────────────
-
-describe('GET /api/flags', () => {
-  it('returns 200 with all feature flags', async () => {
-    const res = await request(app).get('/api/flags');
+describe('Health endpoints', () => {
+  it('GET /health returns 200 with version', async () => {
+    const res = await request(app).get('/health');
     expect(res.status).toBe(200);
-    expect(res.body).toHaveProperty('new-product-layout');
-    expect(res.body).toHaveProperty('express-checkout');
-    expect(res.body).toHaveProperty('holiday-promotion');
-    expect(res.body).toHaveProperty('beta-search');
-    expect(res.body).toHaveProperty('canary-recommendation-engine');
+    expect(res.body).toHaveProperty('status', 'ok');
+    expect(res.body).toHaveProperty('version');
   });
 
-  it('all flags default to false when flagd returns false', async () => {
-    const res = await request(app).get('/api/flags');
-    expect(Object.values(res.body).every(v => v === false)).toBe(true);
+  it('GET /ready returns 200', async () => {
+    const res = await request(app).get('/ready');
+    expect(res.status).toBe(200);
+    expect(res.body.ready).toBe(true);
+  });
+
+  it('GET /metrics returns Prometheus text', async () => {
+    const res = await request(app).get('/metrics');
+    expect(res.status).toBe(200);
+    expect(res.text).toMatch(/# HELP/);
   });
 });
 
-// ── /api/products ─────────────────────────────────────────────────────────────
-
 describe('GET /api/products', () => {
-  it('returns a non-empty products array', async () => {
+  it('returns product list with meta', async () => {
     const res = await request(app).get('/api/products');
     expect(res.status).toBe(200);
     expect(Array.isArray(res.body.products)).toBe(true);
     expect(res.body.products.length).toBeGreaterThan(0);
+    expect(res.body.meta).toHaveProperty('version');
+    expect(res.body.meta).toHaveProperty('features');
   });
 
   it('products have required fields', async () => {
@@ -52,46 +51,33 @@ describe('GET /api/products', () => {
       expect(p).toHaveProperty('id');
       expect(p).toHaveProperty('name');
       expect(p).toHaveProperty('price');
-      expect(p).toHaveProperty('emoji');
     }
   });
 
-  it('no discount applied when holiday-promotion flag is off', async () => {
+  it('no discount when holiday-promotion flag is off', async () => {
     const res = await request(app).get('/api/products');
-    expect(res.body.holidayPromotion).toBe(false);
-    for (const p of res.body.products) {
-      expect(p.discount).toBe(0);
-      expect(p.price).toBe(p.originalPrice);
-    }
+    expect(res.body.meta.holidayDiscount).toBe(0);
+    expect(res.body.meta.features.holidayPromotion).toBe(false);
+  });
+
+  it('all feature flags are off by default', async () => {
+    const res = await request(app).get('/api/products');
+    const { features } = res.body.meta;
+    expect(features.newProductCatalog).toBe(false);
+    expect(features.aiRecommendations).toBe(false);
+    expect(features.holidayPromotion).toBe(false);
   });
 });
 
-// ── /api/admin/flags ──────────────────────────────────────────────────────────
-
-describe('GET /api/admin/flags', () => {
-  it('returns the flags configuration object', async () => {
-    const res = await request(app).get('/api/admin/flags');
+describe('GET /api/products/:id', () => {
+  it('returns a single product', async () => {
+    const res = await request(app).get('/api/products/1');
     expect(res.status).toBe(200);
-    expect(res.body).toHaveProperty('flags');
-    expect(typeof res.body.flags).toBe('object');
-  });
-});
-
-// ── Static pages ──────────────────────────────────────────────────────────────
-
-describe('Static pages', () => {
-  it('GET / returns 200', async () => {
-    const res = await request(app).get('/');
-    expect(res.status).toBe(200);
+    expect(res.body).toHaveProperty('id', 1);
   });
 
-  it('GET /admin returns 200', async () => {
-    const res = await request(app).get('/admin');
-    expect(res.status).toBe(200);
-  });
-
-  it('GET /checkout returns 200', async () => {
-    const res = await request(app).get('/checkout');
-    expect(res.status).toBe(200);
+  it('returns 404 for unknown product', async () => {
+    const res = await request(app).get('/api/products/999');
+    expect(res.status).toBe(404);
   });
 });

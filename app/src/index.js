@@ -5,15 +5,14 @@ async function main() {
   await initFlags();
   setupRoutes();
 
-  const port = process.env.PORT || 3000;
+  const port    = Number(process.env.PORT) || 8080;
+  const version = process.env.APP_VERSION || 'dev';
+
   app.listen(port, () => {
-    console.log(`\n🛒  Acme Shop  →  http://localhost:${port}`);
-    console.log(`⚙   Admin UI   →  http://localhost:${port}/admin`);
-    console.log('\nTip: edit flags/flags.json and flagd will hot-reload them.\n');
+    console.log(`\n🚀  Acme API ${version}  →  http://localhost:${port}`);
+    console.log(`📊  Metrics        →  http://localhost:${port}/metrics`);
+    console.log(`🏥  Health         →  http://localhost:${port}/health\n`);
   });
 }
 
-main().catch(err => {
-  console.error('Fatal startup error:', err);
-  process.exit(1);
-});
+main().catch(err => { console.error('Fatal:', err); process.exit(1); });

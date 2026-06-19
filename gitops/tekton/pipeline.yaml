@@ -1,0 +1,138 @@
+# ──────────────────────────────────────────────────────────────────────────────
+# Tekton Pipeline — CI for Release on Demand
+#
+# Triggered by a GitHub webhook on push to main.
+# Stages:
+#   clone → test → build-image → push-image → update-gitops
+#
+# The last stage writes the new image tag to k8s/overlays/production/kustomization.yaml
+# ArgoCD detects the git change and syncs → Argo Rollouts starts canary
+# ──────────────────────────────────────────────────────────────────────────────
+apiVersion: tekton.dev/v1
+kind: Pipeline
+metadata:
+  name: acme-api-ci
+  namespace: tekton-pipelines
+spec:
+  params:
+    - name: git-url
+      type: string
+      description: GitHub repository URL
+    - name: git-revision
+      type: string
+      default: main
+    - name: image-registry
+      type: string
+      default: ghcr.io/org/acme-api
+    - name: image-tag
+      type: string
+      description: Image tag (typically the git SHA)
+
+  workspaces:
+    - name: source
+      description: Shared workspace for source code
+    - name: docker-credentials
+      description: Docker config for pushing images
+
+  tasks:
+    # ── 1. Clone source ───────────────────────────────────────────────────────
+    - name: clone
+      taskRef:
+        resolver: cluster
+        params:
+          - name: kind
+            value: task
+          - name: name
+            value: git-clone
+          - name: namespace
+            value: tekton-pipelines
+      params:
+        - name: url
+          value: $(params.git-url)
+        - name: revision
+          value: $(params.git-revision)
+      workspaces:
+        - name: output
+          workspace: source
+
+    # ── 2. Run tests ──────────────────────────────────────────────────────────
+    - name: test
+      runAfter: [clone]
+      taskRef:
+        kind: Task
+        name: npm-test
+      params:
+        - name: working-dir
+          value: ./app
+      workspaces:
+        - name: source
+          workspace: source
+
+    # ── 3. Build & push Docker image ──────────────────────────────────────────
+    - name: build-push
+      runAfter: [test]
+      taskRef:
+        resolver: cluster
+        params:
+          - name: kind
+            value: task
+          - name: name
+            value: kaniko
+          - name: namespace
+            value: tekton-pipelines
+      params:
+        - name: IMAGE
+          value: $(params.image-registry):$(params.image-tag)
+        - name: CONTEXT
+          value: ./app
+        - name: DOCKERFILE
+          value: ./app/Dockerfile
+        - name: BUILD_ARG
+          value: APP_VERSION=$(params.image-tag)
+        - name: EXTRA_ARGS
+          value:
+            - "--cache=true"
+            - "--cache-repo=$(params.image-registry)/cache"
+      workspaces:
+        - name: source
+          workspace: source
+        - name: dockerconfig
+          workspace: docker-credentials
+
+    # ── 4. Tag as latest ──────────────────────────────────────────────────────
+    - name: tag-latest
+      runAfter: [build-push]
+      taskRef:
+        resolver: cluster
+        params:
+          - name: kind
+            value: task
+          - name: name
+            value: skopeo-copy
+          - name: namespace
+            value: tekton-pipelines
+      params:
+        - name: srcImageURL
+          value: docker://$(params.image-registry):$(params.image-tag)
+        - name: destImageURL
+          value: docker://$(params.image-registry):latest
+
+    # ── 5. Update GitOps repo with new image tag ──────────────────────────────
+    # ArgoCD picks up this commit and triggers ArgoRollouts canary
+    - name: update-gitops
+      runAfter: [tag-latest]
+      taskRef:
+        kind: Task
+        name: update-gitops-image-tag
+      params:
+        - name: git-url
+          value: $(params.git-url)
+        - name: image-name
+          value: $(params.image-registry)
+        - name: new-tag
+          value: $(params.image-tag)
+        - name: gitops-path
+          value: k8s/overlays/production/kustomization.yaml
+      workspaces:
+        - name: source
+          workspace: source

@@ -1,0 +1,98 @@
+# ──────────────────────────────────────────────────────────────────────────────
+# Flagger Canary — Alternative to Argo Rollouts
+#
+# Flagger automates the canary analysis loop:
+#   1. Detects a new Deployment revision
+#   2. Creates canary Deployment + Service automatically
+#   3. Routes traffic in steps (10% → 20% → 30% ... → 50%)
+#   4. Evaluates Prometheus metrics after each step
+#   5. Promotes on success, rolls back on failure
+#
+# USE EITHER Argo Rollouts (k8s/argo-rollouts/) OR Flagger — not both.
+# Flagger is simpler to operate; Argo Rollouts gives more control.
+# ──────────────────────────────────────────────────────────────────────────────
+apiVersion: flagger.app/v1beta1
+kind: Canary
+metadata:
+  name: acme-api
+  namespace: production
+spec:
+  # Target the Deployment (not a Rollout — Flagger manages its own pods)
+  targetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: acme-api
+
+  progressDeadlineSeconds: 120
+
+  # ── Istio Service Mesh config ─────────────────────────────────────────────
+  service:
+    port: 8080
+    targetPort: 8080
+    gateways:
+      - acme-api-gateway
+    hosts:
+      - "api.acme.example.com"
+    trafficPolicy:
+      tls:
+        mode: ISTIO_MUTUAL
+    retries:
+      attempts: 3
+      perTryTimeout: 1s
+      retryOn: gateway-error,connect-failure,refused-stream
+
+  # ── Canary Analysis ───────────────────────────────────────────────────────
+  analysis:
+    interval: 1m            # evaluate every 1 minute
+    threshold: 5            # max 5 failed checks before rollback
+    maxWeight: 50           # cap canary at 50% before promotion
+    stepWeight: 10          # increase canary weight by 10% each step
+
+    # Prometheus metric gates
+    metrics:
+      - name: request-success-rate
+        templateRef:
+          name: request-success-rate
+          namespace: flagger-system
+        thresholdRange:
+          min: 99           # ≥ 99% success rate required
+        interval: 1m
+
+      - name: request-duration
+        templateRef:
+          name: request-duration
+          namespace: flagger-system
+        thresholdRange:
+          max: 500          # ≤ 500ms p99 latency required
+        interval: 30s
+
+    # ── Pre-rollout acceptance test ─────────────────────────────────────────
+    webhooks:
+      - name: acceptance-test
+        type: pre-rollout
+        url: http://flagger-loadtester.flagger-system/
+        timeout: 30s
+        metadata:
+          type: bash
+          cmd: >-
+            curl -sf http://acme-api-canary.production:8080/health
+            | grep '"status":"ok"'
+
+      # Load generator — keeps canary warm during analysis
+      - name: load-test
+        type: rollout
+        url: http://flagger-loadtester.flagger-system/
+        metadata:
+          cmd: >-
+            hey -z 2m -q 20 -c 5
+            http://acme-api-canary.production:8080/api/products
+
+      # Business approval gate — calls an external webhook before promotion
+      # Replace with your ticketing system / Slack approval bot URL
+      - name: business-approval
+        type: confirm-promotion
+        url: http://release-bot.internal/api/approve
+        timeout: 24h        # wait up to 24 hours for a human to approve
+        metadata:
+          service: acme-api
+          environment: production

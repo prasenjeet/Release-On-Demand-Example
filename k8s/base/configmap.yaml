@@ -1,0 +1,8 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: acme-api-config
+data:
+  UNLEASH_URL: "http://unleash.feature-flags.svc.cluster.local:4242/api"
+  PORT: "8080"
+  NODE_ENV: "production"

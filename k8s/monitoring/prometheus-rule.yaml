@@ -1,0 +1,76 @@
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: acme-api-rules
+  namespace: production
+  labels:
+    release: prometheus
+spec:
+  groups:
+    # ── Recording rules: pre-compute expensive queries ────────────────────────
+    - name: acme-api.slo.recording
+      interval: 30s
+      rules:
+        - record: job:http_request_success_rate:5m
+          expr: |
+            sum by (job, version) (
+              rate(http_requests_total{status_code!~"5.."}[5m])
+            )
+            /
+            sum by (job, version) (
+              rate(http_requests_total[5m])
+            )
+
+        - record: job:http_request_duration_p99:5m
+          expr: |
+            histogram_quantile(0.99,
+              sum by (job, version, le) (
+                rate(http_request_duration_seconds_bucket[5m])
+              )
+            )
+
+    # ── Alerts: fire during canary analysis ───────────────────────────────────
+    - name: acme-api.canary.alerts
+      rules:
+        - alert: CanaryHighErrorRate
+          expr: |
+            job:http_request_success_rate:5m{job="acme-api-canary"} < 0.99
+          for: 2m
+          labels:
+            severity: critical
+            team: platform
+          annotations:
+            summary: "Canary error rate too high — blocking promotion"
+            description: |
+              Canary success rate is {{ $value | humanizePercentage }}.
+              Required: ≥ 99%. Argo Rollouts will auto-rollback.
+            runbook_url: https://wiki.internal/runbooks/canary-rollback
+
+        - alert: CanaryHighLatency
+          expr: |
+            job:http_request_duration_p99:5m{job="acme-api-canary"} > 0.5
+          for: 2m
+          labels:
+            severity: warning
+            team: platform
+          annotations:
+            summary: "Canary P99 latency exceeds 500ms"
+            description: |
+              Canary P99 latency: {{ $value | humanizeDuration }}.
+              Threshold: 500ms.
+
+    # ── SLO alerts: fire in production ───────────────────────────────────────
+    - name: acme-api.slo.alerts
+      rules:
+        - alert: APIErrorBudgetBurn
+          expr: |
+            job:http_request_success_rate:5m{job="acme-api-stable"} < 0.999
+          for: 5m
+          labels:
+            severity: critical
+            team: platform
+          annotations:
+            summary: "Acme API SLO breach — error budget burning"
+            description: |
+              Current success rate: {{ $value | humanizePercentage }}.
+              SLO target: 99.9%.

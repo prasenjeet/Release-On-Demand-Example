@@ -1,0 +1,47 @@
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+  external_labels:
+    cluster: local-dev
+    environment: development
+
+rule_files:
+  - /etc/prometheus/rules/*.yaml
+
+alerting:
+  alertmanagers:
+    - static_configs:
+        - targets: ["alertmanager:9093"]
+
+scrape_configs:
+  # ── Acme API (stable instance) ────────────────────────────────────────────
+  - job_name: acme-api-stable
+    static_configs:
+      - targets: ["app-stable:8080"]
+    metrics_path: /metrics
+    relabel_configs:
+      - target_label: version
+        replacement: v1.0.0
+      - target_label: role
+        replacement: stable
+
+  # ── Acme API (canary instance) ────────────────────────────────────────────
+  - job_name: acme-api-canary
+    static_configs:
+      - targets: ["app-canary:8080"]
+    metrics_path: /metrics
+    relabel_configs:
+      - target_label: version
+        replacement: v2.0.0
+      - target_label: role
+        replacement: canary
+
+  # ── Prometheus self-monitoring ─────────────────────────────────────────────
+  - job_name: prometheus
+    static_configs:
+      - targets: ["localhost:9090"]
+
+  # ── Nginx traffic splitter ─────────────────────────────────────────────────
+  - job_name: nginx
+    static_configs:
+      - targets: ["nginx-exporter:9113"]

@@ -1,23 +1,18 @@
 const express = require('express');
-const path = require('path');
+const { metricsMiddleware } = require('./middleware/metrics');
 
 const app = express();
-
 app.use(express.json());
-app.use(express.static(path.join(__dirname, '../public')));
+app.use(metricsMiddleware);
 
 function setupRoutes() {
-  app.use('/api', require('./routes/api'));
+  app.use('/',    require('./routes/health'));
+  app.use('/api', require('./routes/products'));
 
-  app.get('/admin', (_req, res) =>
-    res.sendFile(path.join(__dirname, '../public/admin.html'))
-  );
-  app.get('/checkout', (_req, res) =>
-    res.sendFile(path.join(__dirname, '../public/checkout.html'))
-  );
-  app.get('/', (_req, res) =>
-    res.sendFile(path.join(__dirname, '../public/index.html'))
-  );
+  app.use((err, _req, res, _next) => {
+    console.error(err.stack);
+    res.status(500).json({ error: 'Internal server error' });
+  });
 }
 
 module.exports = { app, setupRoutes };

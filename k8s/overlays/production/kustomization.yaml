@@ -1,0 +1,22 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+namespace: production
+
+resources:
+  - ../../base
+  - ../../argo-rollouts/rollout.yaml
+  - ../../argo-rollouts/analysis-success-rate.yaml
+  - ../../argo-rollouts/analysis-latency.yaml
+  - ../../istio/gateway.yaml
+  - ../../istio/virtual-service.yaml
+  - ../../istio/destination-rule.yaml
+  - ../../monitoring/service-monitor.yaml
+  - ../../monitoring/prometheus-rule.yaml
+
+images:
+  - name: ghcr.io/org/acme-api
+    newTag: latest             # ArgoCD / Tekton will update this tag
+
+patches:
+  - path: patch-hpa.yaml

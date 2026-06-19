@@ -1,0 +1,146 @@
+# ──────────────────────────────────────────────────────────────────────────────
+# Argo Rollouts — Canary Rollout
+#
+# This replaces the standard Deployment. Argo Rollouts manages the canary
+# lifecycle: traffic shifting → analysis → promotion (or rollback).
+#
+# Flow:
+#   New image pushed  →  ArgoCD syncs  →  Rollout creates canary pods
+#   →  Istio shifts 5% traffic  →  Prometheus analysis runs
+#   →  Each step passes  →  weight increases (20% → 50% → 100%)
+#   →  Old pods terminate  →  Deployment complete
+#
+#   If analysis fails at ANY step  →  Automatic rollback to stable
+# ──────────────────────────────────────────────────────────────────────────────
+apiVersion: argoproj.io/v1alpha1
+kind: Rollout
+metadata:
+  name: acme-api
+  namespace: production
+  labels:
+    app: acme-api
+  annotations:
+    notifications.argoproj.io/subscribe.on-rollout-completed.slack: release-eng
+    notifications.argoproj.io/subscribe.on-rollout-degraded.slack: release-eng
+spec:
+  replicas: 5
+  revisionHistoryLimit: 3
+  selector:
+    matchLabels:
+      app: acme-api
+
+  template:
+    metadata:
+      labels:
+        app: acme-api
+    spec:
+      serviceAccountName: acme-api
+      containers:
+        - name: acme-api
+          image: ghcr.io/org/acme-api:latest    # Tekton updates this tag
+          ports:
+            - name: http
+              containerPort: 8080
+          envFrom:
+            - configMapRef:
+                name: acme-api-config
+          env:
+            - name: UNLEASH_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: unleash-credentials
+                  key: api-token
+            - name: APP_VERSION
+              value: "v2.0.0"                   # Updated per image build
+          resources:
+            requests:
+              cpu: "100m"
+              memory: "128Mi"
+            limits:
+              cpu: "500m"
+              memory: "512Mi"
+          readinessProbe:
+            httpGet:
+              path: /ready
+              port: 8080
+            initialDelaySeconds: 5
+            periodSeconds: 5
+            failureThreshold: 3
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 8080
+            initialDelaySeconds: 10
+            periodSeconds: 15
+            failureThreshold: 3
+
+  strategy:
+    canary:
+      # Argo Rollouts manages stable/canary service selectors automatically
+      stableService: acme-api-stable
+      canaryService: acme-api-canary
+
+      # Istio-based traffic splitting (weight-controlled, not pod-count-based)
+      trafficRouting:
+        istio:
+          virtualService:
+            name: acme-api-vsvc
+            routes:
+              - primary          # matches the route name in VirtualService
+          destinationRule:
+            name: acme-api-destrule
+            canarySubsetName: canary
+            stableSubsetName: stable
+
+      # ── Canary progression steps ─────────────────────────────────────────
+      steps:
+        # Step 1: Route 5% to canary, hold 2 min for initial signal
+        - setWeight: 5
+        - pause:
+            duration: 2m
+
+        # Step 2: Run Prometheus analysis at 5% weight
+        - analysis:
+            templates:
+              - templateName: canary-success-rate
+              - templateName: canary-latency-p99
+            args:
+              - name: canary-service
+                value: acme-api-canary
+
+        # Step 3: Increase to 20% for broader validation
+        - setWeight: 20
+        - pause:
+            duration: 5m
+        - analysis:
+            templates:
+              - templateName: canary-success-rate
+              - templateName: canary-latency-p99
+            args:
+              - name: canary-service
+                value: acme-api-canary
+
+        # Step 4: Increase to 50% — majority canary
+        - setWeight: 50
+        - pause:
+            duration: 10m
+        - analysis:
+            templates:
+              - templateName: canary-success-rate
+              - templateName: canary-latency-p99
+            args:
+              - name: canary-service
+                value: acme-api-canary
+
+        # Step 5: Pause for HUMAN / BUSINESS APPROVAL before full promotion
+        # This is the Release on Demand gate — a human decides to release
+        # Use: kubectl argo rollouts promote acme-api -n production
+        #   or the Argo Rollouts dashboard
+        #   or the trigger-release.sh script
+        - pause: {}    # indefinite pause — waits for manual promotion
+
+        # Step 6: Full canary (100% traffic to new version)
+        - setWeight: 100
+
+      # Auto-rollback if analysis fails
+      autoPromotionEnabled: false        # require explicit promotion

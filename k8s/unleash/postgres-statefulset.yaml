@@ -1,0 +1,70 @@
+apiVersion: v1
+kind: Secret
+metadata:
+  name: unleash-postgres-secret
+  namespace: feature-flags
+type: Opaque
+stringData:
+  POSTGRES_DB:       unleash
+  POSTGRES_USER:     unleash
+  POSTGRES_PASSWORD: changeme-use-external-secrets-in-prod
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: unleash-postgres
+  namespace: feature-flags
+spec:
+  serviceName: unleash-postgres
+  replicas: 1
+  selector:
+    matchLabels:
+      app: unleash-postgres
+  template:
+    metadata:
+      labels:
+        app: unleash-postgres
+    spec:
+      containers:
+        - name: postgres
+          image: postgres:16-alpine
+          ports:
+            - containerPort: 5432
+          envFrom:
+            - secretRef:
+                name: unleash-postgres-secret
+          resources:
+            requests:
+              cpu: "100m"
+              memory: "256Mi"
+            limits:
+              cpu: "500m"
+              memory: "1Gi"
+          volumeMounts:
+            - name: data
+              mountPath: /var/lib/postgresql/data
+          readinessProbe:
+            exec:
+              command: ["pg_isready", "-U", "unleash"]
+            initialDelaySeconds: 5
+            periodSeconds: 5
+  volumeClaimTemplates:
+    - metadata:
+        name: data
+      spec:
+        accessModes: ["ReadWriteOnce"]
+        resources:
+          requests:
+            storage: 5Gi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: unleash-postgres
+  namespace: feature-flags
+spec:
+  selector:
+    app: unleash-postgres
+  ports:
+    - port: 5432
+  clusterIP: None    # headless for StatefulSet

@@ -1,0 +1,55 @@
+groups:
+  - name: canary.recording
+    interval: 15s
+    rules:
+      - record: canary:http_success_rate:5m
+        expr: |
+          sum by (role, version) (
+            rate(http_requests_total{status_code!~"5.."}[5m])
+          )
+          /
+          sum by (role, version) (
+            rate(http_requests_total[5m])
+          )
+
+      - record: canary:http_rps:1m
+        expr: |
+          sum by (role, version) (
+            rate(http_requests_total[1m])
+          )
+
+      - record: canary:http_latency_p99:5m
+        expr: |
+          histogram_quantile(0.99,
+            sum by (role, version, le) (
+              rate(http_request_duration_seconds_bucket[5m])
+            )
+          )
+
+      - record: canary:http_latency_p50:5m
+        expr: |
+          histogram_quantile(0.50,
+            sum by (role, version, le) (
+              rate(http_request_duration_seconds_bucket[5m])
+            )
+          )
+
+  - name: canary.alerts
+    rules:
+      - alert: CanaryHighErrorRate
+        expr: canary:http_success_rate:5m{role="canary"} < 0.99
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Canary success rate below 99% — consider rollback"
+
+      - alert: CanaryLatencyRegression
+        expr: |
+          canary:http_latency_p99:5m{role="canary"}
+          > 1.2 * canary:http_latency_p99:5m{role="stable"}
+        for: 3m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Canary P99 latency is 20% worse than stable"

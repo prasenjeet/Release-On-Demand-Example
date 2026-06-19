@@ -1,0 +1,35 @@
+apiVersion: tekton.dev/v1
+kind: Task
+metadata:
+  name: npm-test
+  namespace: tekton-pipelines
+spec:
+  params:
+    - name: working-dir
+      type: string
+      default: .
+    - name: node-version
+      type: string
+      default: "20"
+
+  workspaces:
+    - name: source
+
+  steps:
+    - name: install
+      image: node:$(params.node-version)-alpine
+      workingDir: $(workspaces.source.path)/$(params.working-dir)
+      script: |
+        #!/bin/sh
+        set -e
+        echo "Installing dependencies..."
+        npm ci
+
+    - name: test
+      image: node:$(params.node-version)-alpine
+      workingDir: $(workspaces.source.path)/$(params.working-dir)
+      script: |
+        #!/bin/sh
+        set -e
+        echo "Running tests..."
+        npm run test:ci

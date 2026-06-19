@@ -1,0 +1,38 @@
+# ──────────────────────────────────────────────────────────────────────────────
+# AnalysisTemplate: Success Rate Gate
+#
+# Queries Prometheus to ensure the canary's HTTP success rate stays ≥ 99%.
+# Argo Rollouts evaluates this every 1 minute. Three consecutive failures
+# trigger an automatic rollback.
+# ──────────────────────────────────────────────────────────────────────────────
+apiVersion: argoproj.io/v1alpha1
+kind: AnalysisTemplate
+metadata:
+  name: canary-success-rate
+  namespace: production
+spec:
+  args:
+    - name: canary-service    # injected by the Rollout step
+
+  metrics:
+    - name: success-rate
+      interval: 1m
+      # Require ≥ 99% success rate (non-5xx / total)
+      successCondition: result[0] >= 0.99
+      failureLimit: 3          # 3 consecutive failures → rollback
+      provider:
+        prometheus:
+          address: http://prometheus-operated.monitoring.svc.cluster.local:9090
+          query: |
+            sum(
+              rate(http_requests_total{
+                kubernetes_service_name="{{args.canary-service}}",
+                status_code!~"5.."
+              }[5m])
+            )
+            /
+            sum(
+              rate(http_requests_total{
+                kubernetes_service_name="{{args.canary-service}}"
+              }[5m])
+            )

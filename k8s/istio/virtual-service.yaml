@@ -1,0 +1,54 @@
+# ──────────────────────────────────────────────────────────────────────────────
+# Istio VirtualService — Traffic Splitting
+#
+# Argo Rollouts patches the weights at each canary step.
+# Starting state: 100% stable, 0% canary.
+# The `primary` route name must match what's referenced in rollout.yaml.
+# ──────────────────────────────────────────────────────────────────────────────
+apiVersion: networking.istio.io/v1beta1
+kind: VirtualService
+metadata:
+  name: acme-api-vsvc
+  namespace: production
+spec:
+  gateways:
+    - acme-api-gateway
+    - mesh                  # also applies to in-cluster traffic
+  hosts:
+    - "api.acme.example.com"
+    - acme-api-stable       # in-cluster hostname
+  http:
+    - name: primary         # ← Argo Rollouts references this route name
+      match:
+        - uri:
+            prefix: /api
+        - uri:
+            exact: /health
+        - uri:
+            exact: /ready
+        - uri:
+            exact: /metrics
+      route:
+        - destination:
+            host: acme-api-stable
+            port:
+              number: 8080
+            subset: stable
+          weight: 100        # Argo Rollouts patches this weight
+        - destination:
+            host: acme-api-canary
+            port:
+              number: 8080
+            subset: canary
+          weight: 0          # Argo Rollouts patches this weight
+      # Fault injection for chaos testing (disabled by default)
+      # fault:
+      #   delay:
+      #     percentage:
+      #       value: 5
+      #     fixedDelay: 500ms
+      retries:
+        attempts: 3
+        perTryTimeout: 2s
+        retryOn: gateway-error,connect-failure,retriable-4xx
+      timeout: 10s

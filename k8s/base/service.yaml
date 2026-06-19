@@ -1,0 +1,33 @@
+# The stable Service — points to current production pods (managed by Argo Rollouts)
+apiVersion: v1
+kind: Service
+metadata:
+  name: acme-api-stable
+  labels:
+    app: acme-api
+    role: stable
+spec:
+  selector:
+    app: acme-api
+  ports:
+    - name: http
+      port: 8080
+      targetPort: 8080
+  type: ClusterIP
+---
+# The canary Service — points to canary pods during a rollout
+apiVersion: v1
+kind: Service
+metadata:
+  name: acme-api-canary
+  labels:
+    app: acme-api
+    role: canary
+spec:
+  selector:
+    app: acme-api
+  ports:
+    - name: http
+      port: 8080
+      targetPort: 8080
+  type: ClusterIP

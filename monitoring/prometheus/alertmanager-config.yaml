@@ -1,0 +1,47 @@
+global:
+  resolve_timeout: 5m
+
+route:
+  group_by: [alertname, severity]
+  group_wait: 30s
+  group_interval: 5m
+  repeat_interval: 12h
+  receiver: default-receiver
+
+  routes:
+    - match:
+        severity: critical
+      receiver: pagerduty-critical
+      continue: true
+
+    - match_re:
+        alertname: "^Canary.*"
+      receiver: slack-release-eng
+      group_wait: 10s    # fast notification for canary issues
+
+receivers:
+  - name: default-receiver
+    slack_configs:
+      - api_url: "${SLACK_WEBHOOK_URL}"
+        channel: "#platform-alerts"
+        title: "[{{ .Status | toUpper }}] {{ .GroupLabels.alertname }}"
+        text: "{{ range .Alerts }}{{ .Annotations.summary }}\n{{ end }}"
+
+  - name: slack-release-eng
+    slack_configs:
+      - api_url: "${SLACK_WEBHOOK_URL}"
+        channel: "#release-engineering"
+        title: "🚀 Canary Alert: {{ .GroupLabels.alertname }}"
+        text: "{{ range .Alerts }}{{ .Annotations.summary }}\n{{ .Annotations.description }}{{ end }}"
+
+  - name: pagerduty-critical
+    pagerduty_configs:
+      - service_key: "${PAGERDUTY_SERVICE_KEY}"
+        description: "{{ .GroupLabels.alertname }}: {{ .CommonAnnotations.summary }}"
+
+inhibit_rules:
+  - source_match:
+      severity: critical
+    target_match:
+      severity: warning
+    equal: [alertname]

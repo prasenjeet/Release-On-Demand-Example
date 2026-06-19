@@ -1,0 +1,43 @@
+apiVersion: flagger.app/v1beta1
+kind: MetricTemplate
+metadata:
+  name: request-success-rate
+  namespace: flagger-system
+spec:
+  provider:
+    type: prometheus
+    address: http://prometheus-operated.monitoring.svc.cluster.local:9090
+  query: |
+    100 * sum(
+      rate(http_requests_total{
+        namespace="{{ namespace }}",
+        pod=~"{{ target }}-[0-9a-zA-Z]+(-[0-9a-zA-Z]+)",
+        status_code!~"5.."
+      }[{{ interval }}])
+    )
+    /
+    sum(
+      rate(http_requests_total{
+        namespace="{{ namespace }}",
+        pod=~"{{ target }}-[0-9a-zA-Z]+(-[0-9a-zA-Z]+)"
+      }[{{ interval }}])
+    )
+---
+apiVersion: flagger.app/v1beta1
+kind: MetricTemplate
+metadata:
+  name: request-duration
+  namespace: flagger-system
+spec:
+  provider:
+    type: prometheus
+    address: http://prometheus-operated.monitoring.svc.cluster.local:9090
+  query: |
+    histogram_quantile(0.99,
+      sum by (le) (
+        rate(http_request_duration_seconds_bucket{
+          namespace="{{ namespace }}",
+          pod=~"{{ target }}-[0-9a-zA-Z]+(-[0-9a-zA-Z]+)"
+        }[{{ interval }}])
+      )
+    ) * 1000

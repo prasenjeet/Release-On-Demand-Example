@@ -1,0 +1,56 @@
+# ──────────────────────────────────────────────────────────────────────────────
+# ArgoCD Application — Acme API
+#
+# ArgoCD watches k8s/overlays/production/ in git.
+# When Tekton pushes an updated image tag, ArgoCD detects the drift
+# and syncs the new Rollout spec to the cluster.
+# Argo Rollouts then starts the canary automatically.
+# ──────────────────────────────────────────────────────────────────────────────
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: acme-api-production
+  namespace: argocd
+  labels:
+    environment: production
+    team: platform
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io    # delete resources on app delete
+spec:
+  project: acme
+
+  source:
+    repoURL: https://github.com/org/release-on-demand-example.git
+    targetRevision: main
+    path: k8s/overlays/production
+    kustomize:
+      version: v5.2.1
+
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: production
+
+  syncPolicy:
+    automated:
+      prune: true             # remove resources deleted from git
+      selfHeal: true          # revert manual cluster changes
+      allowEmpty: false
+    syncOptions:
+      - CreateNamespace=true
+      - PrunePropagationPolicy=foreground
+      - RespectIgnoreDifferences=true
+      - ServerSideApply=true
+
+  # Argo Rollouts manages canary weights — don't let ArgoCD overwrite them
+  ignoreDifferences:
+    - group: networking.istio.io
+      kind: VirtualService
+      jsonPointers:
+        - /spec/http/0/route/0/weight
+        - /spec/http/0/route/1/weight
+    - group: argoproj.io
+      kind: Rollout
+      jsonPointers:
+        - /spec/replicas
+
+  revisionHistoryLimit: 5
